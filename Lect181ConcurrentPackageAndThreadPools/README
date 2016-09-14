@@ -1,0 +1,186 @@
+The java.util.concurrent package was introduced in java 1.5 in order to assist 
+developers in their work with threads, multiple threads and sync.
+
+Synchronizing blocks besides its advantages also have drawbacks, for instance:
+
+1 - threads that are blocked waiting to execute synchronized code can't be 
+interrupted, once theiy're blocked they're stuck there until they get the 
+lock for the object that the code is synchronizing on and this can lead to problems. 
+
+2 - the synchronized block must be within the same method, i.e, 
+we can't start a synchronized block in one method and end the synchronization 
+block in another. 
+
+3 - we can't test to see if an object's intrinsic lock is available or find 
+out any other information about that lock 
+
+4 - if a lock isn't available we can't timeout after we waited for the 
+lock for a while
+
+When we reach the beginning of a synchronized block we can either get the lock and 
+continue executing or block at that line of code until we get the lock.
+
+5 - if multiple threads are waiting to get a lock is not "first come first served", 
+there isn't a set order in which the JVM will choose the next thread that gets the lock. 
+So the first thread that blocked could be the last thread to get the lock, for example.
+
+Instead of using synchronization we can prevent thread interference by using classes 
+that implement the java.util.concurrentlocs.Lock interface.
+
+- ReentratLock : if a thread is already holding a reentrant lock when it reaches the code 
+that requires the same lock it can continue executing, it doesn't has to obtain the lock again. 
+Although it looks like this characteristic should be a given, not all the implementations 
+of the lock interface are re-entrant so we are going to create the lock. 
+
+And we use the methods lock(); unlock(); around the operations we want to be executed.
+
+NOTE : it's very important to realize that when using lock objects we're responsible for 
+releasing the lock, it won't happen automatically (as it happens in synchronized blocks). 
+When a thread calls the lock() method it will either obtain the lock and continue executing, 
+or it won't be able to get the lock because of another thread already has it. 
+In that case that thread that called the lock and didn't get it will be suspended until 
+it can get that lock. If we forget to release the lock, threads waiting for the lock 
+will then start blocking forever. 
+
+With lock()/unlock() we essentially replace the synchronized(){....} block.
+
+
+Using Try/Finally blocks with Threads ======================================
+
+Using lock()/unlock() not in the recommended what could make our code prone to errors 
+and difficult to maintain.
+
+There are some good reasons for using Try/Finally with threads:
+
+1 - we only to call unlock in one place
+
+2 - it would be possible for code within a critical section to thrown an exception that 
+we're not explicitly handling using a catch statement and we want to make sure that we 
+have released any locks we are holding when that scenario plays out. 
+
+NOTE : unless an application crashes in a really bad way, when the try block exits the 
+code in the finally block will always be executed. Also is to note that the call to lock 
+is outside the try/catch block, we don't have to worry about the lock being released until 
+we actually own it. In fact, if we try to release a lock that we don't own, 
+we'll get an IllegalMonitorsStateException. When we're blocked we don't own the lock as such. 
+
+A thread can actually test to see whether a lock is available using the tryLock() method. 
+So if lock is available, the thread will acquire the lock and continue executing 
+and if it's not available the thread won't block and alternatively can execute some different code. 
+
+With tryLock() we can also use a timeOut, so if the thread is still waiting for the lock when the 
+timeOut expires it's interrupted and continues executing. 
+
+We might as well also want to see how many threads are waiting for a lock before we try to acquire it, 
+for example if there are already a lot of threads waiting we can run other code instead of block 
+and wait for the lock.
+
+Previously we saw that one drawback to using synchronize block is that they aren't first come first served, 
+the lock interface doens't dictate this behavior either but some implementations do. 
+Now, the Reentrant lock constructor accepts a fairness parameter, 
+when is set to true the reentrant lock class will try to be fair by giving them the lock to 
+whichever thread has been waiting for it the longest. Again, 
+if a thread comes along and finds out that a hundred threads are already waiting and it 
+knows the lock is a fair lock, it might choose to terminate instead of blocking on the lock. 
+
+When using a Reentrant lock we can also check for the number of threads waiting for the lock 
+by calling to getQueuedLength() method. 
+
+Thread Pools =============================================================
+
+There's also the ExecutiveService interface, also found in the java.util.concurrent package. 
+And we use implementations of this interface to manage threads for us, 
+so that we don't have to explicitly create and start threads, unlikely what we've been doing so far. 
+
+The implementation provided by the JDK manages things like thread scheduling and also optimize the 
+creation of threads which can generally be expensive in terms of performance and memory. 
+We still have to provide Runnable objects to the service, because we obviously have to 
+code the tasks we want to be executed on background threads, but we don't directly 
+manage any threads as such. The ExecutiveService implementation allow us to focus on 
+the code we want to run without the fuss of managing threads and their life cycles. 
+Essentially we create an implementation of executive service and give it to the tasks we want to run, 
+without worrying about the details of how the tasks will actually run. 
+
+The Executive implementation makes use of THREAD-POOLS: is a nutshell what it does 
+is manage a set of threads, it reduces the overhead of thread creation specially 
+in applications that use a larger number of threads; 
+a THREAD-POOL may also limit the number of threads that are active, 
+running a block at any one particular time. When using a certain types of TRHEAD POOLs 
+an application can't run wild and create an excessive number of threads, 
+in Java we use Thread-Pools through the ExecutiveService implementations.
+
+If we want to we can actually implement out own THREAD-POOL by creating a class 
+that implements one of the THREAD-POOL interfaces and by doing so, 
+we can then configure how the underlying THREAD-POOL is managed. 
+But it's recommended that we use the implementations provided by the JVM in most situations. 
+Since THREAD-POOLs can limit the number of active threads is possible that when we 
+asked the service to run a task it won't be able to run it straight away, 
+for example if the maximum number of threads has been set to 20 they may already 
+be 20 active threads when we submitted a task, in that case the task will have 
+to wait on the services queue until one of the active threads actually terminates.
+
+The ExecutiveService interface extends the ExecutorInterface which is which only has one method, 
+execute(). The execute() method is intended to be a remplacement for the following code: 
+(new Thread(r)).start(); which would be substituted by ex.execute(r). 
+Being "r" in both cases a Runnable.
+
+NOTE: in this cases we have to terminate the application manually. 
+In our example the two Consumer threads are "exiting" and they report it, 
+we know the the Producer thread is terminated. But the application didn't terminate, 
+why? The reason is because we've got to shut down the executive service when no longer need it, 
+if we don't shut it down our application is going to remain live even after 
+the MAIN-thread is terminated. So we need to call the shutdown() method. 
+
+What happens then is that when shutdown() is called the service will wait for any 
+executing tasks to terminate. In the example we saw that we created 3 threads 
+and they completely completed their tasks before the service got shutdown. 
+What it won't happen after we issue that shutdown() is accepting any new tasks. 
+This is an orderly shutdown. If we wanted the service to shutdown immediately 
+we'd call the shutdownNow() method, in which case, the service will try to halt 
+any remaining tasks and will also throws away any tasks in the queue. 
+But, there's no actual guarantees that it will be able to do that, 
+it's possible that some threads will never terminate so is always 
+best to shutdown in an orderly fashion. 
+
+Using an ExecutiveService for this application for this application is overkill, 
+but is vital for applications that use a large number of threads because using 
+them allows the JVM to optimize thread management. 
+
+When we want to receive a value back from a thread that we're executing in the 
+background we can use the submit() method. The submit() method accepts a callable 
+object which is very similar to Runnable object, except that it can return a value. 
+The value can be returned as an object of type future. 
+
+NOTE : the call to the future.get() method blocks until the result is available 
+when we're calling it from the main thread application the main thread application 
+will be frozen until the results are available. 
+So, we wouldn't use this method in a UI application, in fact we wouldn't use a service 
+in the java.util.concurrent package in a UI application. When working with JavaFX 
+we instead use the classes in the JavaFX concurrent package to run tasks on the 
+background threads and to process the results. The classes in the JavaFX package 
+leverage the classes in the java.util.concurrent package in a way that makes 
+sense for UI applications.
+
+We can also interrupt services and if the Callable throws an exception is going 
+to be translated into an execution exception.
+
+Lecture 186 ARRAY-BLOCKING-QUEUE class =========================================
+
+All the queue classes implement the blockingQueue interface. 
+An ArrayBlockingQueue processes element in a FIFO order. 
+Also we don't need to worry about sync in queue.put because is a THREAD-SAFE method.
+
+ 
+THREAD-SAFE means that we can be confident that out call to one of the class methods 
+will complete before another thread can run a method in the class. e,g 
+the Producer can only call the put() method and the code following the put() 
+doesn't depend on the result of the put(). However in the Consumer code what we're doing 
+is we check to see if the queue is empty, if it isn't then we peak at the next element 
+but the consumer thread can be suspended between calling is empty() and calling peak(). 
+While it suspended the other consumer thread can run and take the next element from the queue. 
+When the suspended Consumer thread runs again, peak() returns null and consequently 
+we get a NPE when we call the equal method. 
+
+This all bring us to the fact that we might still need to use synchronization code when 
+using thread-safe classes like ArrayBlockingQueue.
+
